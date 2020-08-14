@@ -28,3 +28,5 @@ This project keeps a fairly low barrier of entry in terms of code quality; feel 
 Before adding a feature, I would consult the community in the Discord server to gauge actual interest. There are plenty of creative things you can do with a Discord bot, but it can be easy for a bot to start feeling pestiferous when it becomes bloated with gratuitous novelty features.
 
 **Feel free to DM katie#3975 if you have any questions!**
+
+**Please run `go fmt` before committing!**
