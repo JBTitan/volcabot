@@ -3,18 +3,16 @@ name: Go
 on: [ push, pull_request ]
 
 jobs:
-
   build:
     name: Build
     runs-on: ubuntu-latest
     steps:
-
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
         go-version: ^1.13
       id: go
-
+      
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
 
@@ -26,6 +24,19 @@ jobs:
 
     - name: Test
       run: go test -v .
-    
+      
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v2
+      with:
+        go-version: ^1.13
+      id: go
+      
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+      
     - name: Format
-      run: gofmt -d . | grep -v .
+      run: diff --new-line-format='%L' /dev/null <(gofmt -d .)
