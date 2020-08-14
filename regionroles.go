@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
 	"strings"
@@ -20,17 +21,11 @@ func decodeRegionalIndicators(str string) string {
 }
 
 func getOrCreateRegionRole(guildID string, name string) (*discordgo.Role, error) {
-	roles, err := discord.GuildRoles(guildID)
+	role, err := getRegionRole(guildID, name)
 	if err != nil {
-		return nil, err
+		return role, err
 	}
-	var role *discordgo.Role
-	for i := range roles {
-		if strings.HasPrefix(roles[i].Name, name) {
-			role = roles[i]
-			break
-		}
-	}
+
 	if role == nil {
 		role, err = discord.GuildRoleCreate(guildID)
 		if err != nil {
@@ -42,6 +37,40 @@ func getOrCreateRegionRole(guildID string, name string) (*discordgo.Role, error)
 		}
 	}
 	return role, nil
+}
+func getRegionRole(guildID string, name string) (*discordgo.Role, error) {
+	roles, err := discord.GuildRoles(guildID)
+	if err != nil {
+		return nil, err
+	}
+	var role *discordgo.Role
+	for i := range roles {
+		if strings.HasPrefix(roles[i].Name, name) {
+			role = roles[i]
+			break
+		}
+	}
+	return role, nil
+}
+
+func isRegionRoleMessage(channelID string, messageID string) (bool, error) {
+	message, err := discord.ChannelMessage(channelID, messageID)
+	if err != nil {
+		return false, fmt.Errorf("error fetching message: %w", err)
+	}
+	me, err := discord.User("@me")
+	if err != nil {
+		return false, fmt.Errorf("error fetching @me: %w", err)
+	}
+
+	if message.Author.ID != me.ID {
+		return false, nil
+	}
+	if message.Content != "React to this message with your home's flag!" {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func init() {
@@ -66,26 +95,13 @@ func init() {
 			"emoji":   reaction.Emoji.Name,
 		})
 
-		message, err := discord.ChannelMessage(reaction.ChannelID, reaction.MessageID)
+		isRegMessage, err := isRegionRoleMessage(reaction.ChannelID, reaction.MessageID)
 		if err != nil {
-			log.WithError(err).Errorln("error fetching message in MessageReactionAdd handler")
+			log.WithError(err).Errorln("error checking for region role message")
+		}
+		if !isRegMessage {
 			return
 		}
-
-		me, err := discord.User("@me")
-		if err != nil {
-			log.WithError(err).Errorln("error fetching @me MessageReactionAdd handler")
-			return
-		}
-
-		if message.Author.ID != me.ID {
-			return
-		}
-
-		if message.Content != "React to this message with your home's flag!" {
-			return
-		}
-		log.Trace("reaction to a regionroles message")
 
 		reg := decodeRegionalIndicators(reaction.Emoji.Name)
 		if len(reg) != 2 {
@@ -107,5 +123,46 @@ func init() {
 		}
 
 		log.Debug("added region role to user")
+	})
+
+	discord.AddHandler(func(s *discordgo.Session, reaction *discordgo.MessageReactionRemove) {
+		log := log.WithFields(log.Fields{
+			"message": reaction.MessageID,
+			"channel": reaction.ChannelID,
+			"guild":   reaction.GuildID,
+			"user":    reaction.UserID,
+			"emoji":   reaction.Emoji.Name,
+		})
+
+		isRegMessage, err := isRegionRoleMessage(reaction.ChannelID, reaction.MessageID)
+		if err != nil {
+			log.WithError(err).Errorln("error checking for region role message")
+		}
+		if !isRegMessage {
+			return
+		}
+
+		reg := decodeRegionalIndicators(reaction.Emoji.Name)
+		if len(reg) != 2 {
+			return
+		}
+		log = log.WithField("regional_indicator", reg)
+
+		role, err := getRegionRole(reaction.GuildID, reaction.Emoji.Name)
+		if err != nil {
+			log.WithError(err).Errorln("error getting region role")
+			return
+		}
+		if role == nil {
+			log.Warnln("removed reaction for non-existent flag role")
+			return
+		}
+
+		log = log.WithField("role", role.ID)
+
+		err = discord.GuildMemberRoleRemove(reaction.GuildID, reaction.UserID, role.ID)
+		if err != nil {
+			log.WithError(err).Errorln("error removing region role from user")
+		}
 	})
 }
