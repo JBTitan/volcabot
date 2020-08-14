@@ -1,4 +1,4 @@
-module tests/2020/volcabot
+module github.com/k80w/volcabot
 
 go 1.15
 
